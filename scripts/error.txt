@@ -1,0 +1,4 @@
+# Скрипт с ошибкой: выполнение остановится на строке 3
+ls first
+unknown_command
+ls never_runs

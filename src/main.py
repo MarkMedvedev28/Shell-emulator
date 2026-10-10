@@ -1,5 +1,6 @@
 """Эмулятор командной оболочки UNIX-подобной ОС (вариант 22)."""
 
+import argparse
 import os
 import re
 import shlex
@@ -77,6 +78,41 @@ def run_line(line):
     return True
 
 
+def run_script(path, vfs_name):
+    """Выполняет стартовый скрипт, показывая ввод и вывод.
+
+    Строки, начинающиеся с #, — комментарии. При ошибке выполнение
+    останавливается с сообщением о номере строки.
+    """
+    try:
+        with open(path, encoding="utf-8") as file:
+            lines = file.read().splitlines()
+    except OSError as error:
+        raise ShellError(f"cannot read script '{path}': "
+                         f"{error.strerror}") from error
+    for number, line in enumerate(lines, start=1):
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        print(f"{vfs_name}$ {line}")
+        if not run_line(line):
+            raise ShellError(f"script error at {path}:{number}")
+
+
+def parse_args(argv):
+    """Разбирает параметры командной строки."""
+    parser = argparse.ArgumentParser(description="Эмулятор оболочки UNIX")
+    parser.add_argument("--vfs", help="путь к физическому расположению VFS")
+    parser.add_argument("--script", help="путь к стартовому скрипту")
+    return parser.parse_args(argv)
+
+
+def vfs_name_of(path):
+    """Имя VFS — имя каталога из пути или имя по умолчанию."""
+    if not path:
+        return DEFAULT_VFS_NAME
+    return os.path.basename(os.path.normpath(path)) or DEFAULT_VFS_NAME
+
+
 def repl(vfs_name):
     """Интерактивный цикл: приглашение, ввод, выполнение."""
     while True:
@@ -88,12 +124,22 @@ def repl(vfs_name):
         run_line(line)
 
 
-def main():
-    """Точка входа: запускает REPL, возвращает код завершения."""
+def main(argv=None):
+    """Точка входа: печатает параметры, выполняет скрипт, запускает REPL."""
+    options = parse_args(argv)
+    vfs_name = vfs_name_of(options.vfs)
+    print(f"[debug] vfs path = {options.vfs}")
+    print(f"[debug] script   = {options.script}")
+    print(f"[debug] vfs name = {vfs_name}")
     try:
-        repl(DEFAULT_VFS_NAME)
+        if options.script:
+            run_script(options.script, vfs_name)
+        repl(vfs_name)
     except ExitRequest as request:
         return request.code
+    except ShellError as error:
+        print(error)
+        return 1
     return 0
 
 
